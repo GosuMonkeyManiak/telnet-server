@@ -1,0 +1,50 @@
+# ================================
+# MPLAB X generated directories
+# ================================
+.generated_files/
+build/
+debug/
+dist/
+mcc-manifest-autosave.yml
+mcc-manifest-generated-success.yml
+
+# ================================
+# MPLAB X private project data
+# ================================
+nbproject/private/
+
+# ================================
+# Generated makefiles (keep main Makefile)
+# ================================
+Makefile-*
+Package-*
+
+# ================================
+# Compiler outputs (XC32)
+# ================================
+*.o
+*.d
+*.elf
+*.hex
+*.map
+*.lst
+*.cof
+
+# ================================
+# Temporary / backup files
+# ================================
+*.log
+*.log.inx
+*.tmp
+*.bak
+*.old
+*.orig
+*~
+
+# ================================
+# IDE / OS files
+# ================================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
