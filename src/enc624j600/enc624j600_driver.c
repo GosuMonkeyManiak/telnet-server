@@ -264,7 +264,7 @@
 #define PADCFG2     0x0080U     /**< Automatic Pad and CRC Configuration bit */
 #define NOBKOFF     0x1000U     /**< No Backoff Enable bit (applies to half duplex only) */
 #define BPEN        0x2000U     /**< No Backoff During Back Pressure Enable bit (applies to half duplex only) */
-#define MACDEFER       0x4000U     /**< Defer Transmission Enable bit (applies to half duplex only) */
+#define MACDEFER    0x4000U     /**< Defer Transmission Enable bit (applies to half duplex only) */
 
 /* MACLCON */
 #define MAXRET0     0x0001U     /**< Maximum Retransmissions Control bit (half duplex only) */
@@ -528,8 +528,8 @@ static void write_buffer_pointer(enc624j600_buffer_pointer pointer, uint16_t new
             break;
     }
     
-    enc624j600_hal_spi_transfer(new_value & 0xFF); // LSB
-    enc624j600_hal_spi_transfer((new_value >> 8) & 0xFF); // MSB
+    enc624j600_hal_spi_transfer((uint8_t) (new_value & 0xFF)); // LSB
+    enc624j600_hal_spi_transfer((uint8_t) ((new_value >> 8) & 0xFF)); // MSB
     
     enc624j600_hal_cs_deassert();
 }
@@ -558,12 +558,14 @@ static void write_sfr_unbanked(uint8_t sfr_addr, uint16_t new_value) {
     enc624j600_hal_spi_transfer(WCRU);
     enc624j600_hal_spi_transfer(sfr_addr);
     
-    enc624j600_hal_spi_transfer(new_value & 0xFF); // LSB
-    enc624j600_hal_spi_transfer((new_value >> 8) & 0xFF); // MSB
+    enc624j600_hal_spi_transfer((uint8_t) (new_value & 0xFF)); // LSB
+    enc624j600_hal_spi_transfer((uint8_t) ((new_value >> 8) & 0xFF)); // MSB
     
     enc624j600_hal_cs_deassert();
 }
 
+// has no effect on any SFR in the unbanked region (addresses 0x80 through 0x9F)
+// has no effect on MAC or MII registers
 static void bit_field_set_sfr_unbanked(uint8_t sfr_addr, uint16_t mask) {
     
     enc624j600_hal_cs_assert();
@@ -571,12 +573,14 @@ static void bit_field_set_sfr_unbanked(uint8_t sfr_addr, uint16_t mask) {
     enc624j600_hal_spi_transfer(BFSU);
     enc624j600_hal_spi_transfer(sfr_addr);
     
-    enc624j600_hal_spi_transfer(mask & 0xFF); // LSB
-    enc624j600_hal_spi_transfer((mask >> 8) & 0xFF); // MSB
+    enc624j600_hal_spi_transfer((uint8_t) (mask & 0xFF)); // LSB
+    enc624j600_hal_spi_transfer((uint8_t) ((mask >> 8) & 0xFF)); // MSB
     
     enc624j600_hal_cs_deassert();
 }
 
+// has no effect on any SFR in the unbanked region (addresses 0x80 through 0x9F)
+// has no effect on MAC or MII registers
 static void bit_field_clear_sfr_unbanked(uint8_t sfr_addr, uint16_t mask) {
     
     enc624j600_hal_cs_assert();
@@ -584,10 +588,30 @@ static void bit_field_clear_sfr_unbanked(uint8_t sfr_addr, uint16_t mask) {
     enc624j600_hal_spi_transfer(BFCU);
     enc624j600_hal_spi_transfer(sfr_addr);
     
-    enc624j600_hal_spi_transfer(mask & 0xFF); // LSB
-    enc624j600_hal_spi_transfer((mask >> 8) & 0xFF); // MSB
+    enc624j600_hal_spi_transfer((uint8_t) (mask & 0xFF)); // LSB
+    enc624j600_hal_spi_transfer((uint8_t) ((mask >> 8) & 0xFF)); // MSB
     
     enc624j600_hal_cs_deassert();
+}
+
+/* Functions for bit set/clear only for MAC SFR */
+
+static void bit_field_set_mac_sfr(uint8_t mac_sfr_addr, uint16_t mask) {
+	
+	uint16_t mac_sfr_value = read_sfr_unbanked(mac_sfr_addr);
+	
+	mac_sfr_value = mac_sfr_value | mask;
+	
+	write_sfr_unbanked(mac_sfr_addr, mac_sfr_value);
+}
+
+static void bit_field_clear_mac_sfr(uint8_t mac_sfr_addr, uint16_t mask) {
+	
+	uint16_t mac_sfr_value = read_sfr_unbanked(mac_sfr_addr);
+	
+	mac_sfr_value = mac_sfr_value & (~mask);
+	
+	write_sfr_unbanked(mac_sfr_addr, mac_sfr_value);
 }
 
 /*  Functions to read from/write to, location in SRAM pointed by buffer read/write pointer 
@@ -617,7 +641,7 @@ static void read_from_window_reg(enc624j600_window_reg window_reg, uint8_t *buff
     
     int i;
     
-    for(i = 0; i < n; i++) {
+    for (i = 0; i < n; i++) {
         buffer[i] = enc624j600_hal_spi_transfer(0xAA);
     }
     
@@ -645,7 +669,7 @@ static void write_to_window_reg(enc624j600_window_reg window_reg, uint8_t *buffe
     
     int i;
     
-    for(i = 0; i < n; i++) {
+    for (i = 0; i < n; i++) {
         enc624j600_hal_spi_transfer(buffer[i]);
     }
     
@@ -658,7 +682,7 @@ static uint16_t read_phy_sfr(uint8_t phy_sfr_addr) {
     
     write_sfr_unbanked(MIREGADR, 0x0100 | phy_sfr_addr);
     
-    bit_field_set_sfr_unbanked(MICMD, MIIRD);
+	write_sfr_unbanked(MICMD, 0x0001);
     
     enc624j600_hal_delay(30U);
     
@@ -666,7 +690,7 @@ static uint16_t read_phy_sfr(uint8_t phy_sfr_addr) {
         
     }
     
-    bit_field_clear_sfr_unbanked(MICMD, MIIRD);
+	write_sfr_unbanked(MICMD, 0x0000);
     
     return read_sfr_unbanked(MIRD);
 }
@@ -894,9 +918,8 @@ static void reset(void) {
     uint8_t flag = 1;
     
     // insure that the chip exit POR (Power-on Reset)
-    
     while (flag) {
-        
+		
         write_sfr_unbanked(EUDAST, 0x1234);
     
         if (read_sfr_unbanked(EUDAST) == 0x1234) {
@@ -949,11 +972,11 @@ static void mac_init(void) {
     bit_field_set_sfr_unbanked(ECON2, AUTOFC);
     
     // enable transmit CRC
-    bit_field_set_sfr_unbanked(MACON2, TXCRCEN);
+	bit_field_set_mac_sfr(MACON2, TXCRCEN);
     
     // enable zero-padding to 60 bytes before appending CRC
-    bit_field_clear_sfr_unbanked(MACON2, PADCFG0 | PADCFG1 | PADCFG2);
-    bit_field_set_sfr_unbanked(MACON2, PADCFG0);
+	bit_field_clear_mac_sfr(MACON2, PADCFG0 | PADCFG1 | PADCFG2);
+	bit_field_set_mac_sfr(MACON2, PADCFG0);
     
     // enable automatic transmit MAC source address
     bit_field_set_sfr_unbanked(ECON2, TXMAC);
@@ -983,6 +1006,40 @@ static void phy_init(void) {
 
 void enc624j600_init(void) {
     
+	
+	uint16_t value = 0xAAAA;
+	uint16_t test = 0;
+	
+	// MAC registez
+	
+	test = read_sfr_unbanked(MACON2);
+	bit_field_set_mac_sfr(MACON2, 0x00E0);
+	test = read_sfr_unbanked(MACON2);
+	
+	test = read_sfr_unbanked(MACON2);
+	bit_field_clear_mac_sfr(MACON2, 0x00E0);
+	test = read_sfr_unbanked(MACON2);
+	
+	return;
+
+	
+	
+	/*
+	 *	Configuration
+	 *		- Clock out enable/disable and frequency
+	 *		- Transmit/Receive buffer size
+	 *		- Receive filters
+	 *		- Custom MAC address
+	 *		- Enable/disable VLAN support
+	 *		- Loop back enable/disable
+	 *		- Sleep
+	 * 
+	 *	Status
+	 *		- Speed
+	 *		- Duplex mode
+	 *		- MAC Address
+	 */
+	
     reset();
     
     // ### Disable clock out ###
@@ -1050,12 +1107,12 @@ void enc624j600_init(void) {
     
     if ((read_sfr_unbanked(ESTAT) & PHYDPX) > 0U) {
         // full-duplex
-        bit_field_set_sfr_unbanked(MACON2, FULDPX);
+		bit_field_set_mac_sfr(MACON2, FULDPX);
         write_sfr_unbanked(MABBIPG, 0x0015U);
         duplex_mode = FULL_DUPLEX;
     } else {
         // half-duplex
-        bit_field_clear_sfr_unbanked(MACON2, FULDPX);
+		bit_field_clear_mac_sfr(MACON2, FULDPX);
         write_sfr_unbanked(MABBIPG, 0x0012U);
         duplex_mode = HALF_DUPLEX;
     }
