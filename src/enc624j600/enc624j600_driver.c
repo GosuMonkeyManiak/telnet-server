@@ -1005,25 +1005,7 @@ static void phy_init(void) {
 }
 
 void enc624j600_init(void) {
-    
-	
-	uint16_t value = 0xAAAA;
-	uint16_t test = 0;
-	
-	// MAC registez
-	
-	test = read_sfr_unbanked(MACON2);
-	bit_field_set_mac_sfr(MACON2, 0x00E0);
-	test = read_sfr_unbanked(MACON2);
-	
-	test = read_sfr_unbanked(MACON2);
-	bit_field_clear_mac_sfr(MACON2, 0x00E0);
-	test = read_sfr_unbanked(MACON2);
-	
-	return;
-
-	
-	
+    	
 	/*
 	 *	Configuration
 	 *		- Clock out enable/disable and frequency
@@ -1118,11 +1100,9 @@ void enc624j600_init(void) {
     }
 }
 
-// destination_mac - [MSB,......,LSB]
-enc624j600_transmit_result enc624j600_transmit(uint8_t *destination_mac, uint16_t *length_protocol, uint8_t *data, size_t length) {
+enc624j600_transmit_result enc624j600_transmit(const uint8_t *destination_mac, const uint8_t *length_type, const uint8_t *data, size_t length) {
     
     // TODO: OPERATION MUST BE THREAD SAFE
-    // TODO: CHECK FOR NULL POINTERS
     
     // Frame Length - 1518 bytes
     // Data Length - 1500 bytes max, 46 bytes min
@@ -1135,6 +1115,12 @@ enc624j600_transmit_result enc624j600_transmit(uint8_t *destination_mac, uint16_
     // 4.Set TXRTS bit to initiate transmission
     // 5.Wait the hardware to clear TXRTS then transmission is done
     // 6.Read the ETXSTAT, ETXWIRE for errors
+	
+	if (destination_mac == NULL || 
+		length_type == NULL || 
+		data == NULL) {
+		return ENC_TRANSMIT_FAILED;
+	}
     
     if (length <= 7) {
         return ENC_TRANSMIT_DATA_IS_TOO_SMALL;
@@ -1150,10 +1136,7 @@ enc624j600_transmit_result enc624j600_transmit(uint8_t *destination_mac, uint16_
     write_to_window_reg(EGPDATA, destination_mac, 6U);
     
     // write the length/protocol in SRAM
-    uint8_t buffer[2];
-    buffer[1] = (*length_protocol) & 0xFF;
-    buffer[0] = ((*length_protocol) >> 8) & 0xFF;
-    write_to_window_reg(EGPDATA, buffer, 2);
+    write_to_window_reg(EGPDATA, length_type, 2U);
     
     // write the data in SRAM
     write_to_window_reg(EGPDATA, data, length);
@@ -1187,7 +1170,7 @@ enc624j600_transmit_result enc624j600_transmit(uint8_t *destination_mac, uint16_
         }
         
     } else {
-        
+        // also check for DEFER
         if ((read_sfr_unbanked(ETXSTAT) & (LATECOL | MAXCOL | EXDEFER)) > 0) {
             return ENC_TRANSMIT_FAILED; // TODO: return more specific error
         }
