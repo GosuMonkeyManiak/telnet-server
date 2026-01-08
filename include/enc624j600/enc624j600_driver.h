@@ -34,8 +34,8 @@ extern void enc624j600_init(void);
  *
  *	@param destination_mac Pointer to a 6-byte destination MAC address.
  *	@param length_type Pointer to a 2-byte Length/Type field.
- *					   Values ? 1500 indicate payload length (IEEE 802.3),
- *					   values ? 1536 indicate EtherType (Ethernet II).
+ *					   Values <= 1500 indicate payload length (IEEE 802.3),
+ *					   values >= 1536 indicate EtherType (Ethernet II).
  *	@param data Pointer to the payload data to be transmitted.
  *              Payload size must be at least 8 bytes and no more
  *              than 1500 bytes.
