@@ -1179,19 +1179,23 @@ enc624j600_transmit_result enc624j600_transmit(const uint8_t *destination_mac, c
     return ENC_TRANSMIT_SUCCEEDED;
 }
 
-// destination_mac [MSB,....LSB]
-// source_mac [MSB,.......LSB]
-// buffer [MSB,......LSB]
-int enc624j600_receive(uint8_t *destination_mac, uint8_t *source_mac, uint16_t *length_protocol, uint8_t *buffer, uint16_t *received_bytes) {
+enc624j600_receive_result enc624j600_receive(uint8_t *destination_mac, uint8_t *source_mac, uint8_t *length_type, uint8_t *buffer, uint16_t *received_bytes) {
     // Each frame starts on an even address
     
     // Receive Head Pointer - ERXHEAD, indicating the next location to be written
     // Receive Tail Pointer - ERXTAIL - must be two bytes behind the next frame
     // or two bytes behind head when there isn't frames, because when Tail = Head 
     // means the buffer is full
+	
+	if (destination_mac == NULL || 
+		source_mac == NULL ||
+		length_type == NULL || 
+		buffer == NULL || 
+		received_bytes == NULL) {
+		return ENC_RECEIVE_FAILED;
+	}
     
     // PKTCNT - Receive Packet Count bits
-    
     if(read_sfr_unbanked(ESTAT) & 
        (PKTCNT0 | PKTCNT1 | PKTCNT2 | PKTCNT3 | PKTCNT4 | PKTCNT5 | PKTCNT6 | PKTCNT7) == 0) {
         // no pending frames
@@ -1231,9 +1235,9 @@ int enc624j600_receive(uint8_t *destination_mac, uint8_t *source_mac, uint16_t *
     uint8_t type_length_buff[2];
     read_from_window_reg(ERXDATA, type_length_buff, 2);
     
-    *length_protocol = 0;
-    *length_protocol = (*length_protocol) | type_length_buff[1];
-    *length_protocol = (*length_protocol) | ((uint16_t)type_length_buff[0] << 8);
+    *length_type = 0;
+    *length_type = (*length_type) | type_length_buff[1];
+    *length_type = (*length_type) | ((uint16_t)type_length_buff[0] << 8);
     
     // read data (!!! can have padding !!!)
     read_from_window_reg(ERXDATA, buffer, data_length);
@@ -1244,5 +1248,5 @@ int enc624j600_receive(uint8_t *destination_mac, uint8_t *source_mac, uint16_t *
     // decrement PKTCNT
     execute_single_byte_instruction(SETPKTDEC);
     
-    return 0;
+    return ENC_RECEIVE_SUCCEEDED;
 }

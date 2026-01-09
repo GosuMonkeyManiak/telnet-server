@@ -14,11 +14,22 @@ typedef enum {
     ENC_TRANSMIT_FAILED				/**< Frame transmission failed or any of the pointers are NULL */
 } enc624j600_transmit_result;
 
+/*
+ *	@enum enc624j600_receive_result
+ *	@brief Returned values by enc624j600_receive().
+ * 
+ *	This enumeration defines the possible outcomes of an Ethernet
+ *	frame reception attempt.
+ */
+typedef enum {
+	ENC_RECEIVE_SUCCEEDED = 0,
+	ENC_RECEIVE_FAILED
+} enc624j600_receive_result;
 
 extern void enc624j600_init(void);
 
 /**
- *	@brief Performs transmission of an Ethernet frame.
+ *	@brief Transmits an Ethernet frame.
  *
  *	This function constructs and transmits an Ethernet frame using the
  *	provided destination MAC address, Length/Type field, and payload data.
@@ -44,7 +55,33 @@ extern void enc624j600_init(void);
  *	@return enc624j600_transmit_result
  *		See @ref enc624j600_transmit_result for possible return values.
  */
-extern enc624j600_transmit_result enc624j600_transmit(const uint8_t *destination_mac, const uint8_t *length_type, const uint8_t *data, size_t length);
+extern enc624j600_transmit_result enc624j600_transmit(const uint8_t *destination_mac, const uint8_t *length_type, const uint8_t *data, uint16_t length);
 
-
-extern int enc624j600_receive(uint8_t *destination_mac, uint8_t *source_mac, uint16_t *length_protocol, uint8_t *buffer, uint16_t *received_bytes);
+/**
+ *	@brief Receives an Ethernet frame.
+ *
+ *	This function receives an Ethernet frame and extracts the destination
+ *	MAC address, source MAC address, Length/Type field, and payload data.
+ *
+ *	@pre destination_mac != NULL
+ *	@pre source_mac != NULL
+ *	@pre length_type != NULL
+ *	@pre buffer != NULL
+ *	@pre received_bytes != NULL
+ * 
+ *	@param destination_mac Pointer to a 6-byte buffer where the destination
+ *						   MAC address will be stored.
+ *	@param source_mac Pointer to a 6-byte buffer where the source
+ *                    MAC address will be stored.
+ *	@param length_type Pointer to a 2-byte buffer where the Length/Type
+ *                     field will be stored.
+ *	@param buffer Pointer to a buffer where the received payload
+ *				  data will be written. The buffer must be at least
+ *				  1500 bytes in length.
+ *	@param received_bytes Pointer to a variable where the number of payload
+ *                        bytes received will be stored.
+ *
+ *	@return enc624j600_receive_result
+ *		See @ref enc624j600_receive_result for possible return values.
+ */
+extern enc624j600_receive_result enc624j600_receive(uint8_t *destination_mac, uint8_t *source_mac, uint8_t *length_type, uint8_t *buffer, uint16_t *received_bytes);
