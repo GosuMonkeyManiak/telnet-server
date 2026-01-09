@@ -2,7 +2,7 @@
 
 /**
  *	@enum enc624j600_transmit_result
- *	@brief Result codes returned by enc624j600_transmit().
+ *	@brief Returned values by enc624j600_transmit().
  *
  *	This enumeration defines the possible outcomes of an Ethernet
  *	frame transmission attempt.

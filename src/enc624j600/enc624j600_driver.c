@@ -620,7 +620,7 @@ static void bit_field_clear_mac_sfr(uint8_t mac_sfr_addr, uint16_t mask) {
  *  Windows registers EGPDATA, ERXDATA, EUDADATA are all 8 bits wide
  */
 
-static void read_from_window_reg(enc624j600_window_reg window_reg, uint8_t *buffer, size_t n) {
+static void read_from_window_reg(enc624j600_window_reg window_reg, uint8_t *buffer, uint16_t n) {
     
     enc624j600_hal_cs_assert();
     
@@ -648,7 +648,7 @@ static void read_from_window_reg(enc624j600_window_reg window_reg, uint8_t *buff
     enc624j600_hal_cs_deassert();
 }
 
-static void write_to_window_reg(enc624j600_window_reg window_reg, uint8_t *buffer, size_t n) {
+static void write_to_window_reg(enc624j600_window_reg window_reg, uint8_t *buffer, uint16_t n) {
     
     enc624j600_hal_cs_assert();
     
@@ -1100,7 +1100,7 @@ void enc624j600_init(void) {
     }
 }
 
-enc624j600_transmit_result enc624j600_transmit(const uint8_t *destination_mac, const uint8_t *length_type, const uint8_t *data, size_t length) {
+enc624j600_transmit_result enc624j600_transmit(const uint8_t *destination_mac, const uint8_t *length_type, const uint8_t *data, uint16_t length) {
     
     // TODO: OPERATION MUST BE THREAD SAFE
     
