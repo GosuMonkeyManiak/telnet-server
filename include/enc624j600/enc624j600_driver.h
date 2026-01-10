@@ -23,6 +23,7 @@ typedef enum {
  */
 typedef enum {
 	ENC_RECEIVE_SUCCEEDED = 0,
+	ENC_RECEIVE_NO_PENDING_FRAME,
 	ENC_RECEIVE_FAILED
 } enc624j600_receive_result;
 
@@ -55,7 +56,7 @@ extern void enc624j600_init(void);
  *	@return enc624j600_transmit_result
  *		See @ref enc624j600_transmit_result for possible return values.
  */
-extern enc624j600_transmit_result enc624j600_transmit(const uint8_t *destination_mac, const uint8_t *length_type, const uint8_t *data, uint16_t length);
+extern enc624j600_transmit_result enc624j600_transmit(uint8_t *destination_mac, uint8_t *length_type, uint8_t *data, uint16_t length);
 
 /**
  *	@brief Receives an Ethernet frame.

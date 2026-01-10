@@ -1100,7 +1100,7 @@ void enc624j600_init(void) {
     }
 }
 
-enc624j600_transmit_result enc624j600_transmit(const uint8_t *destination_mac, const uint8_t *length_type, const uint8_t *data, uint16_t length) {
+enc624j600_transmit_result enc624j600_transmit(uint8_t *destination_mac, uint8_t *length_type, uint8_t *data, uint16_t length) {
     
     // TODO: OPERATION MUST BE THREAD SAFE
     
@@ -1196,10 +1196,10 @@ enc624j600_receive_result enc624j600_receive(uint8_t *destination_mac, uint8_t *
 	}
     
     // PKTCNT - Receive Packet Count bits
-    if(read_sfr_unbanked(ESTAT) & 
-       (PKTCNT0 | PKTCNT1 | PKTCNT2 | PKTCNT3 | PKTCNT4 | PKTCNT5 | PKTCNT6 | PKTCNT7) == 0) {
+    if((read_sfr_unbanked(ESTAT) & 
+       (PKTCNT0 | PKTCNT1 | PKTCNT2 | PKTCNT3 | PKTCNT4 | PKTCNT5 | PKTCNT6 | PKTCNT7)) == 0) {
         // no pending frames
-        return -1;
+        return ENC_RECEIVE_NO_PENDING_FRAME;
     }
     
     write_buffer_pointer(ERXRDPT, next_receive_frame_pointer);
@@ -1232,12 +1232,7 @@ enc624j600_receive_result enc624j600_receive(uint8_t *destination_mac, uint8_t *
     read_from_window_reg(ERXDATA, source_mac, 6);
     
     // read type/length
-    uint8_t type_length_buff[2];
-    read_from_window_reg(ERXDATA, type_length_buff, 2);
-    
-    *length_type = 0;
-    *length_type = (*length_type) | type_length_buff[1];
-    *length_type = (*length_type) | ((uint16_t)type_length_buff[0] << 8);
+    read_from_window_reg(ERXDATA, length_type, 2);
     
     // read data (!!! can have padding !!!)
     read_from_window_reg(ERXDATA, buffer, data_length);
