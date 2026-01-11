@@ -11,6 +11,7 @@ typedef enum {
     ENC_TRANSMIT_SUCCEEDED = 0,		/**< Frame transmitted successfully */
     ENC_TRANSMIT_DATA_IS_TOO_SMALL,	/**< Payload length is less than 8 bytes */
     ENC_TRANSMIT_DATA_EXCEED_MTU,	/**< Payload length exceeds 1500 bytes */
+	ENC_FLOW_CONTROL_ACTIVE,		/**< Peer node has been paused the transmission temporary, so the frame wasn't sent */
     ENC_TRANSMIT_FAILED				/**< Frame transmission failed or any of the pointers are NULL */
 } enc624j600_transmit_result;
 
@@ -27,7 +28,24 @@ typedef enum {
 	ENC_RECEIVE_FAILED
 } enc624j600_receive_result;
 
-extern void enc624j600_init(void);
+typedef struct {
+	uint8_t *mac_address;				/**< Pointer to a 6-byte custom MAC address or NULL to use the preprogrammed MAC address */
+	
+	uint8_t mac_huge_frame : 1;		/**< Enable/Disalbe (1/0) If enable frame of any size will be allowed to be transmitted and received.
+									*	 If disable frame bigger than 1518 bytes (whole frame) will be aborted when transmitted or received. */
+	
+	uint8_t mac_loopback : 1;		/**< Enable/Disable (1/0) transmitted frames are loopback inside the MAC before reaching the PHY */
+	
+	uint8_t phy_loppback : 1;		/**< Enable/Disable (1/0) PHY loopback of frames */
+	
+} enc624j600_config;
+
+
+/**
+ * 
+ *	@param config
+ */
+extern void enc624j600_init(enc624j600_config *config);
 
 /**
  *	@brief Transmits an Ethernet frame.
