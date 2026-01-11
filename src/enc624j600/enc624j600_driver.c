@@ -1017,11 +1017,13 @@ static void mac_init(enc624j600_config *config) {
 	// And zero-padded to 64 bytes when vlan support is enable.
 	bit_field_clear_mac_sfr(MACON2, PADCFG0 | PADCFG1 | PADCFG2);
 
-	if (config->mac_vlan == 1) {
-		bit_field_set_mac_sfr(MACON2, PADCFG0 | PADCFG2);
-	} else {
-		bit_field_set_mac_sfr(MACON2, PADCFG0);
-	}
+	bit_field_set_mac_sfr(MACON2, PADCFG0);
+	
+//	if (config->mac_vlan == 1) {
+//		bit_field_set_mac_sfr(MACON2, PADCFG0 | PADCFG2);
+//	} else {
+//		bit_field_set_mac_sfr(MACON2, PADCFG0);
+//	}
 	
 	// Enable automatic CRC generation
 	bit_field_set_mac_sfr(MACON2, TXCRCEN);
