@@ -913,6 +913,12 @@ static void configure_receive_filter(enc624j600_receive_filter filter, enc624j60
     
 }
 
+/* Functions related to physical layer */
+
+static void phy_restart_auto_negotiation_process() {
+	bit_field_set_phy_sfr(PHCON1, RENEG);
+}
+
 static void reset(void) {
     
     uint8_t flag = 1;
@@ -953,74 +959,96 @@ static void reset(void) {
         }
     }
         
-    enc624j600_hal_delay(200U); // 270us
+    enc624j600_hal_delay(200U); // TODO: 270us
 }
 
-static void mac_init(void) {
-    // flow control - possible manual or automatic (in half/full-duplex);
-    // current configuration is for automatic
-    
-    // RXPAUS - pause control frame reception enable bit (should be default (enable))
-    // PASSALL - pass all received frames enable bit (should be default (disable))
-    // EPAUS - number of pause quanta (should be default)
-    
+static void mac_init(enc624j600_config *config) {
+	
+	// Configure flow control - possible manual or automatic (in half/full-duplex);
+	// EPAUS - number of pause quanta (should be default)
     // ERXWM (MSB) - upper threshold when flow control to enable - (16320 bytes)
     // ERXWM (LSB) - lower threshold when flow control to disable - (8160 bytes)
     write_sfr_unbanked(ERXWM, 0xAA55);
     
     // enable automatic flow control
     bit_field_set_sfr_unbanked(ECON2, AUTOFC);
-    
-    // enable transmit CRC
-	bit_field_set_mac_sfr(MACON2, TXCRCEN);
-    
-    // enable zero-padding to 60 bytes before appending CRC
+	
+	// Set custom MAC Address
+	if (config->mac_address != NULL) {
+		uint16_t mac_part = 0;
+		int i = 0;
+		
+		for (i = 0; i < 6; i += 2) {
+			mac_part = mac_part | config->mac_address[i];
+			mac_part = mac_part | ((uint16_t)config->mac_address[i + 1] << 8);
+			
+			write_sfr_unbanked(MAADR1 - i, mac_part);
+			
+			mac_part = 0;
+		}
+	}
+	
+	// Configure maximum frame length to be accepted (received or transmitted)
+	write_sfr_unbanked(MAMXFL, 0x05EE);
+//	if (config->mac_vlan == 1) {
+//		// 1522 bytes
+//		write_sfr_unbanked(MAMXFL, 0x05F2);
+//	} else {
+//		// 1518 bytes
+//		write_sfr_unbanked(MAMXFL, 0x05EE);
+//	}
+	
+	// Enable/Disable frame of any size to be transmitted or received
+	if (config->mac_huge_frame == 1) {
+		bit_field_set_mac_sfr(MACON2, HFRMEN);
+	} else {
+		bit_field_clear_mac_sfr(MACON2, HFRMEN);
+	}
+	
+	// Enable/Disable Loopback in MAC
+	if (config->mac_loopback == 1) {
+		bit_field_set_mac_sfr(MACON1, LOOPBK);
+	} else {
+		bit_field_clear_mac_sfr(MACON1, LOOPBK);
+	}
+	
+	// Configure zero-padding for frames less than 60 bytes to be
+	// padded to 60 bytes with zero, if the vlan support is disable.
+	// And zero-padded to 64 bytes when vlan support is enable.
 	bit_field_clear_mac_sfr(MACON2, PADCFG0 | PADCFG1 | PADCFG2);
+
 	bit_field_set_mac_sfr(MACON2, PADCFG0);
-    
-    // enable automatic transmit MAC source address
-    bit_field_set_sfr_unbanked(ECON2, TXMAC);
-    
-    // set maximum frame length to be accepted (received or transmitted) 1518 bytes
-    write_sfr_unbanked(MAMXFL, 0x05EE);
-    
-    // HFRMEN - huge frame enable bit (should be default(disable))
+	
+//	if (config->mac_vlan == 1) {
+//		bit_field_set_mac_sfr(MACON2, PADCFG0 | PADCFG2);
+//	} else {
+//		bit_field_set_mac_sfr(MACON2, PADCFG0);
+//	}
+	
+	// Enable automatic CRC generation
+	bit_field_set_mac_sfr(MACON2, TXCRCEN);
 }
 
-static void phy_init(void) {
+static void phy_init(enc624j600_config *config) {
     
     // disable Sleep
-    // disable loopback
-    bit_field_clear_phy_sfr(PHCON1, PSLEEP | PLOOPBK);
+    bit_field_clear_phy_sfr(PHCON1, PSLEEP);
+	
+	// Enable/Disable PHY loopback
+	if (config->phy_loppback == 1) {
+		bit_field_set_phy_sfr(PHCON1, PLOOPBK);
+	} else {
+		bit_field_clear_phy_sfr(PHCON1, PLOOPBK);
+	}
     
-    // enable auto-negotiation
-    bit_field_set_phy_sfr(PHCON1, ANEN);
+    // Enable auto-negotiation
+	bit_field_set_phy_sfr(PHCON1, ANEN);
     
-    // enable auto-negotiation to advertises
-    // 10Base-T Half/Full-Duplex; 100Base-TX Half/Full-Duplex
-    bit_field_set_phy_sfr(PHANA, AD10 | AD10FD | AD100 | AD100FD);
-    
-    // advertise PAUSE Flow Control
+    // advertise symmetric PAUSE support
     bit_field_set_phy_sfr(PHANA, ADPAUS0);
 }
 
-void enc624j600_init(void) {
-    	
-	/*
-	 *	Configuration
-	 *		- Clock out enable/disable and frequency
-	 *		- Transmit/Receive buffer size
-	 *		- Receive filters
-	 *		- Custom MAC address
-	 *		- Enable/disable VLAN support
-	 *		- Loop back enable/disable
-	 *		- Sleep
-	 * 
-	 *	Status
-	 *		- Speed
-	 *		- Duplex mode
-	 *		- MAC Address
-	 */
+void enc624j600_init(enc624j600_config *config) {
 	
     reset();
     
@@ -1069,24 +1097,35 @@ void enc624j600_init(void) {
     configure_receive_filter(MAGIC_PACKET_COLLECTION_FILTER, DISABLE);
     configure_receive_filter(PATTERN_MATCH_COLLECTION_FILTER, DISABLE);
     
+	// enable automatic transmit MAC source address
+    bit_field_set_sfr_unbanked(ECON2, TXMAC);
+	
     // ### MAC initialization ###
-    mac_init();
+    mac_init(config);
     
     // ### PHY initialization ###
-    phy_init();
+    phy_init(config);
     
     // enable frame reception
     execute_single_byte_instruction(ENABLERX);
     
-    // ### After link establishment ###
-    
-    while ((read_phy_sfr(PHSTAT1) & LLSTAT) == 0U) {
+	// Wait the auto-negotiation process to complete
+	while ((read_phy_sfr(PHSTAT1) & ANDONE) == 0) {
+		
+	}
+	
+	// Wait the link to establish
+	while ((read_phy_sfr(PHSTAT1) & LLSTAT) == 0U) {
         
     }
+	
+    // ### After link establishment ###
     
-    // FULDPX - MAC Full-Duplex Enable bit
-    // PHYDPX - PHY Full Duplex Status bit
-    
+	// disable frame reception
+	execute_single_byte_instruction(DISABLERX);
+	
+	// Check which duplex mode was selected by the auto-negotiation
+	// and set same on MAC level
     if ((read_sfr_unbanked(ESTAT) & PHYDPX) > 0U) {
         // full-duplex
 		bit_field_set_mac_sfr(MACON2, FULDPX);
@@ -1098,15 +1137,12 @@ void enc624j600_init(void) {
         write_sfr_unbanked(MABBIPG, 0x0012U);
         duplex_mode = HALF_DUPLEX;
     }
+	
+	// enable frame reception
+	execute_single_byte_instruction(ENABLERX);
 }
 
 enc624j600_transmit_result enc624j600_transmit(uint8_t *destination_mac, uint8_t *length_type, uint8_t *data, uint16_t length) {
-    
-    // TODO: OPERATION MUST BE THREAD SAFE
-    
-    // Frame Length - 1518 bytes
-    // Data Length - 1500 bytes max, 46 bytes min
-    
     // Consider different steps for half/full-duplex
     
     // 1.Write the frame into SRAM (destination, protocol, data)
@@ -1116,12 +1152,15 @@ enc624j600_transmit_result enc624j600_transmit(uint8_t *destination_mac, uint8_t
     // 5.Wait the hardware to clear TXRTS then transmission is done
     // 6.Read the ETXSTAT, ETXWIRE for errors
 	
+	// TODO: Add VLAN support
+	
 	if (destination_mac == NULL || 
 		length_type == NULL || 
 		data == NULL) {
 		return ENC_TRANSMIT_FAILED;
 	}
     
+	// special case describe in datasheet
     if (length <= 7) {
         return ENC_TRANSMIT_DATA_IS_TOO_SMALL;
     }
@@ -1129,6 +1168,20 @@ enc624j600_transmit_result enc624j600_transmit(uint8_t *destination_mac, uint8_t
     if (length > 1500) {
         return ENC_TRANSMIT_DATA_EXCEED_MTU;
     }
+	
+	if (duplex_mode == FULL_DUPLEX) {
+		
+		if ((read_sfr_unbanked(ECON1) & (FCOP0 | FCOP1)) > 0) {
+			// peer has been activate the flow control
+			return ENC_FLOW_CONTROL_ACTIVE;
+		}
+	} else {
+		
+		if ((read_sfr_unbanked(ETXSTAT) & DEFER) > 0) {
+			// peer has been activate the flow control
+			return ENC_FLOW_CONTROL_ACTIVE;
+		}
+	}
     
     uint16_t gpwrpt_value = read_buffer_pointer(EGPWRPT);
     
@@ -1150,7 +1203,7 @@ enc624j600_transmit_result enc624j600_transmit(uint8_t *destination_mac, uint8_t
     // set TXRTS bit
     execute_single_byte_instruction(SETTXRTS);
     
-    // wait hardware to clear the TXRTS bit
+    // wait hardware to clear the TXRTS bit (in half-duplex will block)
     while ((read_sfr_unbanked(ECON1) & TXRTS) != 0) {
         
     }
@@ -1170,7 +1223,7 @@ enc624j600_transmit_result enc624j600_transmit(uint8_t *destination_mac, uint8_t
         }
         
     } else {
-        // also check for DEFER
+		
         if ((read_sfr_unbanked(ETXSTAT) & (LATECOL | MAXCOL | EXDEFER)) > 0) {
             return ENC_TRANSMIT_FAILED; // TODO: return more specific error
         }
