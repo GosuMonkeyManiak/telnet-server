@@ -3,12 +3,8 @@
     <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/2" lastBookmarkId="0"/>
     <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/2">
         <group>
-            <file>file:/C:/Users/dimitar/MPLABXProjects/pic32-telent/include/enc624j600/enc624j600_driver.h</file>
-            <file>file:/C:/Users/dimitar/MPLABXProjects/pic32-telent/src/config/default/peripheral/uart/plib_uart1.c</file>
-            <file>file:/C:/Users/dimitar/MPLABXProjects/pic32-telent/src/main.c</file>
-            <file>file:/C:/Users/dimitar/MPLABXProjects/pic32-telent/src/config/default/exceptions.c</file>
-            <file>file:/C:/Users/dimitar/MPLABXProjects/pic32-telent/src/config/default/stdio/xc32_monitor.c</file>
-            <file>file:/C:/Users/dimitar/MPLABXProjects/pic32-telent/src/enc624j600/enc624j600_driver.c</file>
+            <file>file:/C:/Users/dimitar/Desktop/telnet-server/include/lwipopts.h</file>
+            <file>file:/C:/Users/dimitar/Desktop/telnet-server/lwIP/sys_arch/arch/cc.h</file>
         </group>
     </open-files>
 </project-private>
