@@ -17,6 +17,9 @@
 
 #include "enc624j600/enc624j600_driver_hal.h"
 #include "enc624j600/enc624j600_driver.h"
+#include "debug_printf.h"
+#include "utils/flags.h"
+
 
 /**
  *  @defgroup Unbanked_SFR_Address Unbanked SFR addresses
@@ -405,11 +408,6 @@
 
 
 typedef enum {
-    HALF_DUPLEX,
-    FULL_DUPLEX
-} enc624j600_duplex_mode;
-
-typedef enum {
     CRC_ERROR_COLLECTION_FILTER,
     RUNT_ERROR_COLLECTION_FILTER,
     CRC_ERROR_REJECTION_FILTER,
@@ -443,10 +441,17 @@ typedef enum {
     EUDADATA
 } enc624j600_window_reg;
 
+enum {
+	FLAG_LINK_PRESENT = 0,
+	FLAG_DUPLEX_MODE,		// 1 - FULL_DUPLEX; 0 - HALF_DUPLEX
+	FLAG_PENDING_INTERRUPT,
+	FLAG_PENDING_FRAME
+};
 
-static enc624j600_duplex_mode duplex_mode;
+static uint16_t flags = 0U;
 static uint16_t next_receive_frame_pointer = 0U;
 
+/* Functions performing SPI instructions */
 
 static void execute_single_byte_instruction(uint8_t opcode) {
     enc624j600_hal_cs_assert();
@@ -913,10 +918,13 @@ static void configure_receive_filter(enc624j600_receive_filter filter, enc624j60
     
 }
 
-/* Functions related to physical layer */
+/* Functions for set/reset global interrupt bit */
+static void enable_interrupts(void) {
+	bit_field_set_sfr_unbanked(EIE, INTIE);
+}
 
-static void phy_restart_auto_negotiation_process() {
-	bit_field_set_phy_sfr(PHCON1, RENEG);
+static void disable_interrupts(void) {
+	bit_field_clear_sfr_unbanked(EIE, INTIE);
 }
 
 static void reset(void) {
@@ -927,7 +935,7 @@ static void reset(void) {
     while (flag) {
 		
         write_sfr_unbanked(EUDAST, 0x1234);
-    
+		
         if (read_sfr_unbanked(EUDAST) == 0x1234) {
             // SPI interface is working
             flag = 0;
@@ -959,7 +967,7 @@ static void reset(void) {
         }
     }
         
-    enc624j600_hal_delay(200U); // TODO: 270us
+    enc624j600_hal_delay(270U);
 }
 
 static void mac_init(enc624j600_config *config) {
@@ -1048,9 +1056,7 @@ static void phy_init(enc624j600_config *config) {
     bit_field_set_phy_sfr(PHANA, ADPAUS0);
 }
 
-void enc624j600_init(enc624j600_config *config) {
-	
-    reset();
+static void chip_init(enc624j600_config *config) {
     
     // ### Disable clock out ###
     bit_field_clear_sfr_unbanked(ECON2, COCON0 | COCON1 | COCON2 | COCON3);
@@ -1108,13 +1114,15 @@ void enc624j600_init(enc624j600_config *config) {
     
     // enable frame reception
     execute_single_byte_instruction(ENABLERX);
-    
+}
+
+static void reconfig_mac_after_link_estb() {
 	// Wait the auto-negotiation process to complete
 	while ((read_phy_sfr(PHSTAT1) & ANDONE) == 0) {
 		
 	}
 	
-	// Wait the link to establish
+	// Wait the link to establish 
 	while ((read_phy_sfr(PHSTAT1) & LLSTAT) == 0U) {
         
     }
@@ -1127,54 +1135,123 @@ void enc624j600_init(enc624j600_config *config) {
 	// Check which duplex mode was selected by the auto-negotiation
 	// and set same on MAC level
     if ((read_sfr_unbanked(ESTAT) & PHYDPX) > 0U) {
+		
         // full-duplex
 		bit_field_set_mac_sfr(MACON2, FULDPX);
         write_sfr_unbanked(MABBIPG, 0x0015U);
-        duplex_mode = FULL_DUPLEX;
+		
+		set_flag(&flags, FLAG_DUPLEX_MODE);
+		
     } else {
+		
         // half-duplex
 		bit_field_clear_mac_sfr(MACON2, FULDPX);
         write_sfr_unbanked(MABBIPG, 0x0012U);
-        duplex_mode = HALF_DUPLEX;
+		
+		reset_flag(&flags, FLAG_DUPLEX_MODE);
     }
 	
 	// enable frame reception
 	execute_single_byte_instruction(ENABLERX);
 }
 
-enc624j600_transmit_result enc624j600_transmit(uint8_t *destination_mac, uint8_t *length_type, uint8_t *data, uint16_t length) {
-    // Consider different steps for half/full-duplex
-    
-    // 1.Write the frame into SRAM (destination, protocol, data)
-    // 2.Set ETXST - Transmit Data Start Pointer
-    // 3.Set ETXLEN - Transmit Buffer Length Pointer (number of bytes)
-    // 4.Set TXRTS bit to initiate transmission
-    // 5.Wait the hardware to clear TXRTS then transmission is done
-    // 6.Read the ETXSTAT, ETXWIRE for errors
+static void service_interrupt() {
 	
-	// TODO: Add VLAN support
+	disable_interrupts();
 	
-	if (destination_mac == NULL || 
-		length_type == NULL || 
-		data == NULL) {
+	uint16_t temp = 0;
+	uint16_t interrupt_flags = read_sfr_unbanked(EIR);
+	
+	if ((interrupt_flags & LINKIF) > 0) {
+		// link change
+		temp = read_sfr_unbanked(ESTAT);
+		
+		if ((temp & PHYLNK) > 0) {
+			
+			reconfig_mac_after_link_estb();
+			
+			set_flag(&flags, FLAG_LINK_PRESENT);
+			
+		} else {
+			
+			reset_flag(&flags, FLAG_LINK_PRESENT);
+		}
+		
+		// clear interrupts flag
+		bit_field_clear_sfr_unbanked(EIR, LINKIF);
+		
+	} else if ((interrupt_flags & PKTIF) > 0) {
+		// received packet pending
+		set_flag(&flags, FLAG_PENDING_FRAME);
+	}
+	
+	// ... others interrupts
+	
+	enable_interrupts();
+}
+
+
+void enc624j600_driver_init(enc624j600_config *config) {
+	reset();
+	
+	disable_interrupts();
+	
+	chip_init(config);
+	
+	// enable individual interrupt source
+	write_sfr_unbanked(EIE, 0x0000);
+	bit_field_set_sfr_unbanked(EIE, LINKIE | PKTIF);
+	
+	enable_interrupts();
+}
+
+void enc624j600_sig_driver_for_irq(void) {
+	// IRQ context
+	flags = flags & (~(1 << FLAG_PENDING_INTERRUPT));
+	flags = flags | (1 << FLAG_PENDING_INTERRUPT);
+}
+
+uint8_t enc624j600_link_status(void) {
+	return get_flag(&flags, FLAG_LINK_PRESENT) ? 1 : 0;
+}
+
+uint8_t enc624j600_pending_frame(void) {
+	return get_flag(&flags, FLAG_PENDING_FRAME) ? 1 : 0;
+}
+
+void enc624j600_pump(void) {
+	
+	if (!get_flag(&flags, FLAG_PENDING_INTERRUPT)) {
+		return;
+	}
+
+	service_interrupt();
+	
+	reset_flag(&flags, FLAG_PENDING_INTERRUPT);
+}
+
+enc624j600_transmit_result enc624j600_transmit(uint8_t *frame, uint16_t length) {
+	
+	if (frame == NULL) {
 		return ENC_TRANSMIT_FAILED;
 	}
-    
+	
 	// special case describe in datasheet
     if (length <= 7) {
-        return ENC_TRANSMIT_DATA_IS_TOO_SMALL;
+        return ENC_TRANSMIT_FRAME_IS_TOO_SMALL;
     }
     
-    if (length > 1500) {
-        return ENC_TRANSMIT_DATA_EXCEED_MTU;
+    if (length > 1514) {
+        return ENC_TRANSMIT_FRAME_EXCEED_MTU;
     }
 	
-	if (duplex_mode == FULL_DUPLEX) {
+	if (get_flag(&flags, FLAG_DUPLEX_MODE)) {
 		
 		if ((read_sfr_unbanked(ECON1) & (FCOP0 | FCOP1)) > 0) {
 			// peer has been activate the flow control
 			return ENC_FLOW_CONTROL_ACTIVE;
 		}
+		
 	} else {
 		
 		if ((read_sfr_unbanked(ETXSTAT) & DEFER) > 0) {
@@ -1182,23 +1259,22 @@ enc624j600_transmit_result enc624j600_transmit(uint8_t *destination_mac, uint8_t
 			return ENC_FLOW_CONTROL_ACTIVE;
 		}
 	}
-    
-    uint16_t gpwrpt_value = read_buffer_pointer(EGPWRPT);
+	
+	enc624j600_enter_critical();
+	
+	uint16_t gpwrpt_value = read_buffer_pointer(EGPWRPT);
     
     // write the destination MAC in SRAM
-    write_to_window_reg(EGPDATA, destination_mac, 6U);
+    write_to_window_reg(EGPDATA, frame, 6U);
     
-    // write the length/protocol in SRAM
-    write_to_window_reg(EGPDATA, length_type, 2U);
-    
-    // write the data in SRAM
-    write_to_window_reg(EGPDATA, data, length);
+    // write the length/protocol and the data in SRAM
+    write_to_window_reg(EGPDATA, frame + 12, length - 12);
     
     // set the ETXST
     write_sfr_unbanked(ETXST, gpwrpt_value);
     
     // set the ETXLEN
-    write_sfr_unbanked(ETXLEN, 8U + length);
+    write_sfr_unbanked(ETXLEN, length - 6U);
     
     // set TXRTS bit
     execute_single_byte_instruction(SETTXRTS);
@@ -1207,18 +1283,20 @@ enc624j600_transmit_result enc624j600_transmit(uint8_t *destination_mac, uint8_t
     while ((read_sfr_unbanked(ECON1) & TXRTS) != 0) {
         
     }
+	
+	enc624j600_exit_critical();
     
     // Check for errors
     // for full-duplex check only ETXWIRE (total length of the packet, including padding and CRC)
     // for half-duplex check bit in ETXSTAT
     
-    if (duplex_mode == FULL_DUPLEX) {
+    if (get_flag(&flags, FLAG_DUPLEX_MODE)) {
         
-        if (length < 46U) {
-            length = 46;
+        if (length < 60U) {
+            length = 60U;
         }
         
-        if (read_sfr_unbanked(ETXWIRE) != (18U + length)) {
+        if (read_sfr_unbanked(ETXWIRE) != 60U) {
             return ENC_TRANSMIT_FAILED;
         }
         
@@ -1232,29 +1310,14 @@ enc624j600_transmit_result enc624j600_transmit(uint8_t *destination_mac, uint8_t
     return ENC_TRANSMIT_SUCCEEDED;
 }
 
-enc624j600_receive_result enc624j600_receive(uint8_t *destination_mac, uint8_t *source_mac, uint8_t *length_type, uint8_t *buffer, uint16_t *received_bytes) {
-    // Each frame starts on an even address
-    
-    // Receive Head Pointer - ERXHEAD, indicating the next location to be written
-    // Receive Tail Pointer - ERXTAIL - must be two bytes behind the next frame
-    // or two bytes behind head when there isn't frames, because when Tail = Head 
-    // means the buffer is full
+enc624j600_receive_result enc624j600_receive(uint8_t *frame_buffer, uint16_t *received_bytes) {
 	
-	if (destination_mac == NULL || 
-		source_mac == NULL ||
-		length_type == NULL || 
-		buffer == NULL || 
-		received_bytes == NULL) {
+	if (frame_buffer == NULL || received_bytes == NULL) {
 		return ENC_RECEIVE_FAILED;
 	}
     
-    // PKTCNT - Receive Packet Count bits
-    if((read_sfr_unbanked(ESTAT) & 
-       (PKTCNT0 | PKTCNT1 | PKTCNT2 | PKTCNT3 | PKTCNT4 | PKTCNT5 | PKTCNT6 | PKTCNT7)) == 0) {
-        // no pending frames
-        return ENC_RECEIVE_NO_PENDING_FRAME;
-    }
-    
+	enc624j600_enter_critical();
+	
     write_buffer_pointer(ERXRDPT, next_receive_frame_pointer);
     
     // read pointer to next frame
@@ -1271,30 +1334,25 @@ enc624j600_receive_result enc624j600_receive(uint8_t *destination_mac, uint8_t *
     read_from_window_reg(ERXDATA, rsv, 6);
     
     // frame bigger than MAMXFL are discard
+	// contains DA, SA, type/length, data, padding, CRC
     uint16_t frame_length = 0;
     frame_length = frame_length | rsv[0];
     frame_length = frame_length | ((uint16_t)rsv[1] << 8);
     
-    uint16_t data_length = frame_length - 18U;
-    *received_bytes = data_length;
+    *received_bytes = frame_length - 4U;
     
-    // read destination address
-    read_from_window_reg(ERXDATA, destination_mac, 6);
-    
-    // read source address
-    read_from_window_reg(ERXDATA, source_mac, 6);
-    
-    // read type/length
-    read_from_window_reg(ERXDATA, length_type, 2);
-    
-    // read data (!!! can have padding !!!)
-    read_from_window_reg(ERXDATA, buffer, data_length);
+    // read frame without CRC
+    read_from_window_reg(ERXDATA, frame_buffer, frame_length - 4U);
     
     // set the ERXTAIL 2 bytes before the new frame
     write_sfr_unbanked(ERXTAIL, next_receive_frame_pointer - 2U);
     
     // decrement PKTCNT
     execute_single_byte_instruction(SETPKTDEC);
-    
-    return ENC_RECEIVE_SUCCEEDED;
+	
+	enc624j600_exit_critical();
+	
+	reset_flag(&flags, FLAG_PENDING_FRAME);
+	
+	return ENC_RECEIVE_SUCCEEDED;
 }

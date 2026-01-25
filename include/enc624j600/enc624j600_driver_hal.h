@@ -33,11 +33,26 @@ extern void enc624j600_hal_cs_assert(void);
  */
 extern void enc624j600_hal_cs_deassert(void);
 
-// ????????????????????????????
-// in reset - 270 out of range 1-byte (0-255)
+/**
+ *	@brief Enter a critical section.
+ *
+ *	This function provides mutual exclusion for shared resources used by the
+ *	ENC624J600 driver. The implementation may disable interrupts to prevent
+ *	concurrent access while the critical section is active.
+ */
+extern void enc624j600_enter_critical(void);
+
+/**
+ *	@brief Exit a critical section.
+ *
+ *	This function releases the protection acquired by
+ *	enc624j600_enter_critical() and restores the previous execution state.
+ */
+extern void enc624j600_exit_critical(void);
+
 /**
  *  @brief Microcontroller-specific function that delays the execution for specific number of microseconds.
  * 
  *  @param us Time in microseconds to delay the execution.
  */
-extern void enc624j600_hal_delay(uint8_t us);
+extern void enc624j600_hal_delay(uint16_t us);
