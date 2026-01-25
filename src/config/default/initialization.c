@@ -170,11 +170,15 @@ void SYS_Initialize ( void* data )
 
 	UART1_Initialize();
 
+    TMR1_Initialize();
+
 	SPI2_Initialize();
 
 
     EVIC_Initialize();
 
+    /* Enable global interrupts */
+    (void)__builtin_enable_interrupts();
 
 
 
