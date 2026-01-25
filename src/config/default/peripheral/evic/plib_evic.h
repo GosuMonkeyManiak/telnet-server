@@ -184,6 +184,12 @@
     /* MISRAC 2012 deviation block end */
 typedef uint32_t INT_SOURCE;
 
+typedef enum
+{
+    EXTERNAL_INT_2 = _IEC0_INT2IE_MASK,
+}EXTERNAL_INT_PIN;
+
+typedef  void (*EXTERNAL_INT_PIN_CALLBACK) (void);
 
 // *****************************************************************************
 // *****************************************************************************
@@ -211,6 +217,14 @@ bool EVIC_INT_Disable( void );
 
 void EVIC_INT_Restore( bool state );
 
+bool EVIC_ExternalInterruptCallbackRegister(
+        EXTERNAL_INT_PIN extIntPin,
+        const EXTERNAL_INT_PIN_CALLBACK callback
+    );
+
+void EVIC_ExternalInterruptEnable( EXTERNAL_INT_PIN extIntPin );
+
+void EVIC_ExternalInterruptDisable( EXTERNAL_INT_PIN extIntPin );
 
 // DOM-IGNORE-BEGIN
 #ifdef __cplusplus  // Provide C++ Compatibility

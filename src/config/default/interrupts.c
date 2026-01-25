@@ -67,6 +67,7 @@
 // *****************************************************************************
 // *****************************************************************************
 void TIMER_1_Handler (void);
+void EXTERNAL_2_Handler (void);
 
 
 // *****************************************************************************
@@ -78,6 +79,12 @@ void __attribute__((used)) __ISR(_TIMER_1_VECTOR, ipl1SOFT) TIMER_1_Handler (voi
 {
     TIMER_1_InterruptHandler();
 }
+
+void __attribute__((used)) __ISR(_EXTERNAL_2_VECTOR, ipl2SOFT) EXTERNAL_2_Handler (void)
+{
+    EXTERNAL_2_InterruptHandler();
+}
+
 
 
 

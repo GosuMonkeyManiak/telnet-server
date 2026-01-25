@@ -44,6 +44,7 @@
 #include "plib_evic.h"
 
 
+static volatile EXTERNAL_INT_PIN_CALLBACK extInt2_callback_func;
 // *****************************************************************************
 // *****************************************************************************
 // Section: IRQ Implementation
@@ -55,8 +56,11 @@ void EVIC_Initialize( void )
     INTCONSET = _INTCON_MVEC_MASK;
 
     /* Set up priority and subpriority of enabled interrupts */
+    IPC1SET = 0x4U | 0x0U;  /* TIMER_1:  Priority 1 / Subpriority 0 */
+    IPC2SET = 0x8000000U | 0x0U;  /* EXTERNAL_2:  Priority 2 / Subpriority 0 */
 
-
+    extInt2_callback_func = NULL;
+	
 }
 
 void EVIC_SourceEnable( INT_SOURCE source )
@@ -127,6 +131,52 @@ void EVIC_INT_Restore( bool state )
     {
         /* restore the state of CP0 Status register before the disable occurred */
         (void) __builtin_enable_interrupts();
+    }
+}
+
+void EVIC_ExternalInterruptEnable( EXTERNAL_INT_PIN extIntPin )
+{
+    IEC0SET = (uint32_t)extIntPin;
+}
+void EVIC_ExternalInterruptDisable( EXTERNAL_INT_PIN extIntPin )
+{
+    IEC0CLR = (uint32_t)extIntPin;
+}
+
+bool EVIC_ExternalInterruptCallbackRegister(
+    EXTERNAL_INT_PIN extIntPin,
+    const EXTERNAL_INT_PIN_CALLBACK callback
+)
+{
+    bool status = true;
+    switch  (extIntPin)
+        {
+        case EXTERNAL_INT_2:
+            extInt2_callback_func = callback;
+            break;
+        default:
+            status = false;
+            break;
+        }
+
+    return status;
+}
+
+// *****************************************************************************
+/* Function:
+    void EXTERNAL_2_InterruptHandler(void)
+  Summary:
+    Interrupt Handler for External Interrupt pin 2.
+  Remarks:
+    It is an internal function called from ISR, user should not call it directly.
+*/
+void __attribute__((used)) EXTERNAL_2_InterruptHandler(void)
+{
+    IFS0CLR = _IFS0_INT2IF_MASK;
+
+    if(extInt2_callback_func != NULL)
+    {
+        extInt2_callback_func();
     }
 }
 
