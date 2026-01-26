@@ -28,3 +28,16 @@ uint8_t get_flag(uint16_t *flags, uint16_t flag) {
 	
 	return flag_value;
 }
+
+void set_flag_without_crs(uint16_t *flags, uint16_t flag) {
+	*flags = (*flags) & (~(1 << flag));
+	*flags = (*flags) | (1 << flag);
+}
+
+void reset_flag_without_crs(uint16_t *flags, uint16_t flag) {
+	(*flags) = (*flags) & (~(1 << flag));
+}
+
+uint8_t get_flag_without_crs(uint16_t *flags, uint16_t flag) {
+	return ((*flags) & (1 << flag)) > 0 ? 1 : 0;
+}
