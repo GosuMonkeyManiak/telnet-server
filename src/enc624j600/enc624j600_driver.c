@@ -955,8 +955,12 @@ static void reset(void) {
     
     // perform system reset
     execute_single_byte_instruction(SETETHRST);
+	
+	enc624j600_exit_critical();
     
     enc624j600_hal_delay(30U);
+	
+	enc624j600_enter_critical();
     
     flag = 1;
     while (flag) {
@@ -966,8 +970,12 @@ static void reset(void) {
             flag = 0;
         }
     }
+	
+	enc624j600_exit_critical();
         
     enc624j600_hal_delay(270U);
+	
+	enc624j600_enter_critical();
 }
 
 static void mac_init(enc624j600_config *config) {
@@ -1140,7 +1148,7 @@ static void reconfig_mac_after_link_estb() {
 		bit_field_set_mac_sfr(MACON2, FULDPX);
         write_sfr_unbanked(MABBIPG, 0x0015U);
 		
-		set_flag(&flags, FLAG_DUPLEX_MODE);
+		set_flag_without_crs(&flags, FLAG_DUPLEX_MODE);
 		
     } else {
 		
@@ -1148,7 +1156,7 @@ static void reconfig_mac_after_link_estb() {
 		bit_field_clear_mac_sfr(MACON2, FULDPX);
         write_sfr_unbanked(MABBIPG, 0x0012U);
 		
-		reset_flag(&flags, FLAG_DUPLEX_MODE);
+		reset_flag_without_crs(&flags, FLAG_DUPLEX_MODE);
     }
 	
 	// enable frame reception
@@ -1170,11 +1178,11 @@ static void service_interrupt() {
 			
 			reconfig_mac_after_link_estb();
 			
-			set_flag(&flags, FLAG_LINK_PRESENT);
+			set_flag_without_crs(&flags, FLAG_LINK_PRESENT);
 			
 		} else {
 			
-			reset_flag(&flags, FLAG_LINK_PRESENT);
+			reset_flag_without_crs(&flags, FLAG_LINK_PRESENT);
 		}
 		
 		// clear interrupts flag
@@ -1182,7 +1190,7 @@ static void service_interrupt() {
 		
 	} else if ((interrupt_flags & PKTIF) > 0) {
 		// received packet pending
-		set_flag(&flags, FLAG_PENDING_FRAME);
+		set_flag_without_crs(&flags, FLAG_PENDING_FRAME);
 	}
 	
 	// ... others interrupts
@@ -1192,6 +1200,9 @@ static void service_interrupt() {
 
 
 void enc624j600_driver_init(enc624j600_config *config) {
+	
+	enc624j600_enter_critical();
+	
 	reset();
 	
 	disable_interrupts();
@@ -1203,12 +1214,13 @@ void enc624j600_driver_init(enc624j600_config *config) {
 	bit_field_set_sfr_unbanked(EIE, LINKIE | PKTIF);
 	
 	enable_interrupts();
+	
+	enc624j600_exit_critical();
 }
 
 void enc624j600_sig_driver_for_irq(void) {
 	// IRQ context
-	flags = flags & (~(1 << FLAG_PENDING_INTERRUPT));
-	flags = flags | (1 << FLAG_PENDING_INTERRUPT);
+	set_flag_without_crs(&flags, FLAG_PENDING_INTERRUPT);
 }
 
 uint8_t enc624j600_link_status(void) {
@@ -1224,10 +1236,14 @@ void enc624j600_pump(void) {
 	if (!get_flag(&flags, FLAG_PENDING_INTERRUPT)) {
 		return;
 	}
+	
+	enc624j600_enter_critical();
 
 	service_interrupt();
 	
-	reset_flag(&flags, FLAG_PENDING_INTERRUPT);
+	reset_flag_without_crs(&flags, FLAG_PENDING_INTERRUPT);
+	
+	enc624j600_exit_critical();
 }
 
 enc624j600_transmit_result enc624j600_transmit(uint8_t *frame, uint16_t length) {
