@@ -149,6 +149,8 @@ void ethernet_if_init(void) {
 	netif_add(&eth_if, IP4_ADDR_ANY, IP4_ADDR_ANY, IP4_ADDR_ANY, NULL, eth_netif_init, netif_input);
 	netif_set_default(&eth_if);
 	netif_set_up(&eth_if);
+	
+	dhcp_start(&eth_if);
 }
 
 void ethernet_if_pump(void) {
@@ -157,11 +159,10 @@ void ethernet_if_pump(void) {
 		
 		if (!get_flag(&flags, FLAG_LINK_LAST_STATE)) {
 			
-			debug_print("\r\n DHCP starting! \r\n");
+			debug_print("\r\n Ethernet link up! \r\n");
 			
-			// TODO: dhcp ???
-			dhcp_start(&eth_if);
 			netif_set_link_up(&eth_if);
+			
 			set_flag(&flags, FLAG_LINK_LAST_STATE);
 			
 			return;
@@ -170,12 +171,11 @@ void ethernet_if_pump(void) {
 	} else {
 		
 		if (get_flag(&flags, FLAG_LINK_LAST_STATE)) {
-			// TODO: dhcp ???
 			
-			debug_print("\r\n DHCP stopping! \r\n");
+			debug_print("\r\n Ethernet link down! \r\n");
 			
-			dhcp_stop(&eth_if);
 			netif_set_link_down(&eth_if);
+			
 			reset_flag(&flags, FLAG_LINK_LAST_STATE);
 		}
 		

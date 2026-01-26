@@ -91,7 +91,6 @@
 
 /* === ARP === */
 #define LWIP_ARP 1
-#define ARP_TABLE_SIZE 3
 
 /* === ICMP === */
 #define LWIP_ICMP 1
