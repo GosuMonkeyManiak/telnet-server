@@ -1312,7 +1312,7 @@ enc624j600_transmit_result enc624j600_transmit(uint8_t *frame, uint16_t length) 
             length = 60U;
         }
         
-        if (read_sfr_unbanked(ETXWIRE) != 60U) {
+        if (read_sfr_unbanked(ETXWIRE) != (length + 4)) {
             return ENC_TRANSMIT_FAILED;
         }
         
