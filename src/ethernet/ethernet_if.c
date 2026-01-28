@@ -78,6 +78,12 @@ static err_t low_level_output(struct netif *netif, struct pbuf *p) {
 	if (enc624j600_link_status()) {
 		result = enc624j600_transmit(p->payload, p->len);
 		
+		if (result != ENC_TRANSMIT_SUCCEEDED) {
+			debug_print("\r\n Frame transmission failed! \r\n");
+			
+			return ERR_IF;
+		}
+		
 		debug_print("\r\n Transmit frame: len = %d.\r\n", p->len);
 	}
 	
@@ -85,9 +91,7 @@ static err_t low_level_output(struct netif *netif, struct pbuf *p) {
 	pbuf_add_header(p, ETH_PAD_SIZE); /* reclaim the padding word */
 #endif
 
-	if (result != ENC_TRANSMIT_SUCCEEDED) {
-		return ERR_IF;
-	}
+
 	
 	return ERR_OK;
 }
